@@ -127,12 +127,12 @@ package object archivesunleashed {
     * To load such an DataFrame, please see [[RecordLoader]].
     */
   implicit class WARecordDF(df: DataFrame) extends java.io.Serializable {
-    def extractPDFDetailsDF2(): DataFrame = {
-      val spark = SparkSession.builder().master("local").getOrCreate()
-      // scalastyle:off
-      import spark.implicits._
-      // scalastyle:on
+    val spark = SparkSession.builder().master("local").getOrCreate()
+    // scalastyle:off
+    import spark.implicits._
+    // scalastyle:on
 
+    def extractPDFDetailsDF2(): DataFrame = {
       df.withColumn("mime_type_tika", DetectMimeTypeTika_UDF($"binaryBytes"))
         .filter($"mime_type_tika" === "application/pdf")
         .withColumnRenamed("mimeType", "mime_type_webserver")
