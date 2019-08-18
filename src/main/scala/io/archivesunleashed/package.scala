@@ -21,6 +21,9 @@ import java.security.MessageDigest
 import java.util.Base64
 
 import io.archivesunleashed.data.{ArchiveRecordInputFormat, ArchiveRecordWritable}
+// scalastyle:off underscore.import
+import io.archivesunleashed.df._
+// scalastyle:on underscore.import
 import ArchiveRecordWritable.ArchiveFormat
 import io.archivesunleashed.matchbox.{DetectLanguage, DetectMimeTypeTika, ExtractDate, ExtractDomain, ExtractImageDetails, ExtractImageLinks, ExtractLinks, GetExtensionMime, RemoveHTML}
 import io.archivesunleashed.matchbox.ExtractDate.DateComponent
@@ -31,7 +34,7 @@ import io.archivesunleashed.matchbox.ExtractDate.DateComponent.DateComponent
 import java.net.URI
 import java.net.URL
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
-import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, StringType, StructField, StructType}
 import org.apache.hadoop.io.LongWritable
 import org.apache.spark.{SerializableWritable, SparkContext}
 import org.apache.spark.rdd.RDD
@@ -47,7 +50,7 @@ package object archivesunleashed {
     /** Gets all non-empty archive files.
       *
       * @param dir the path to the directory containing archive files
-      * @param fs filesystem
+      * @param fs  filesystem
       * @return a String consisting of all non-empty archive files path.
       */
     def getFiles(dir: Path, fs: FileSystem): String = {
@@ -59,7 +62,7 @@ package object archivesunleashed {
     /** Creates an Archive Record RDD from a WARC or ARC file.
       *
       * @param path the path to the WARC(s)
-      * @param sc the apache spark context
+      * @param sc   the apache spark context
       * @return an RDD of ArchiveRecords for mapping.
       */
     def loadArchives(path: String, sc: SparkContext): RDD[ArchiveRecord] = {
@@ -71,6 +74,42 @@ package object archivesunleashed {
           ((r._2.getFormat == ArchiveFormat.WARC) && r._2.getRecord.getHeader.getHeaderValue("WARC-Type").equals("response")))
         .map(r => new ArchiveRecordImpl(new SerializableWritable(r._2)))
     }
+
+    /** Creates an DataFrame with schema of an archive record
+      * from a WARC or ARC file.
+      *
+      * @param path the path to the WARC(s)
+      * @param sc   the apache spark context
+      * @return a DataFrame with archive record schema
+      */
+    def loadArchivesDF(path: String, sc: SparkContext): DataFrame = {
+      /* Wrapper of loadArchives() */
+
+      /* Create mapping of all ArchiveRecordImpl methods to their return
+       * values. No mapping of vals recordFormat and ISO8601.
+       */
+      val rdd_rows = RecordLoader.loadArchives(path, sc).map(r => Row(
+        r.getArchiveFilename, r.getCrawlDate, r.getCrawlMonth,
+        r.getContentBytes, r.getContentString, r.getMimeType, r.getUrl,
+        r.getHttpStatus, r.getDomain, r.getBinaryBytes
+      ))
+
+      val archiveRecordSchema = StructType(Seq(
+        StructField("archiveFilename", StringType, true),
+        StructField("crawlDate", StringType, true),
+        StructField("crawlMonth", StringType, true),
+        StructField("contentBytes", BinaryType, true),
+        StructField("contentString", StringType, true),
+        StructField("mimeType", StringType, true),
+        StructField("url", StringType, true),
+        StructField("httpStatus", StringType, true),
+        StructField("domain", StringType, true),
+        StructField("binaryBytes", BinaryType, true)
+      ))
+
+      SparkSession.builder().getOrCreate()
+        .createDataFrame(rdd_rows, archiveRecordSchema)
+    }
   }
 
   /** A Wrapper class around RDD to simplify counting. */
@@ -79,6 +118,30 @@ package object archivesunleashed {
       rdd.map(r => (r, 1))
         .reduceByKey((c1, c2) => c1 + c2)
         .sortBy(f => f._2, ascending = false)
+    }
+  }
+
+  /**
+    * A Wrapper class around DataFrame to allow queries via a fluent API.
+    *
+    * To load such an DataFrame, please see [[RecordLoader]].
+    */
+  implicit class WARecordDF(df: DataFrame) extends java.io.Serializable {
+    def extractPDFDetailsDF2(): DataFrame = {
+      val spark = SparkSession.builder().master("local").getOrCreate()
+      // scalastyle:off
+      import spark.implicits._
+      // scalastyle:on
+
+      df.withColumn("mime_type_tika", DetectMimeTypeTika_UDF($"binaryBytes"))
+        .filter($"mime_type_tika" === "application/pdf")
+        .withColumnRenamed("mimeType", "mime_type_webserver")
+        .withColumn("md5", ComputeMD5_UDF($"binaryBytes"))
+        .withColumn("path", GetPath_UDF($"url"))
+        .withColumn("filename", GetFilename_UDF($"path"))
+        .withColumn("extension", GetExtensionMime_UDF($"path", $"mime_type_tika"))
+        .select("url", "filename", "extension", "mime_type_webserver",
+          "mime_type_tika", "md5", "binaryBytes")
     }
   }
 

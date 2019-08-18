@@ -20,7 +20,7 @@ package io.archivesunleashed
 import org.apache.commons.io.IOUtils
 import io.archivesunleashed.matchbox.{ComputeMD5, ExtractDomain, RemoveHTML}
 import org.apache.spark.sql.functions.udf
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{Column, DataFrame}
 import java.io.ByteArrayInputStream
 import java.io.FileOutputStream
 import java.util.Base64
@@ -38,6 +38,22 @@ package object df {
   val RemovePrefixWWW = udf[String, String](_.replaceAll("^\\s*www\\.", ""))
 
   var RemoveHTML = udf(io.archivesunleashed.matchbox.RemoveHTML.apply(_:String))
+
+  val DetectMimeTypeTika_UDF = udf(io.archivesunleashed.matchbox.DetectMimeTypeTika(_: Array[Byte]))
+
+  val ComputeMD5_UDF = udf(io.archivesunleashed.matchbox.ComputeMD5(_: Array[Byte]))
+
+  val GetPath_UDF = udf {
+    new java.net.URL(_: String).getPath
+  }
+
+  val GetFilename_UDF = udf {
+    org.apache.commons.io.FilenameUtils.getName(_: String)
+  }
+
+  val GetExtensionMime_UDF = udf((path: String, mimeType: String) => {
+    io.archivesunleashed.matchbox.GetExtensionMime(path, mimeType)
+  })
 
   /**
    * Given a dataframe, serializes binary object and saves to disk
