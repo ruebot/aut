@@ -29,6 +29,7 @@ import io.archivesunleashed.matchbox.{
   ComputeMD5,
   ExtractDate,
   ExtractDomain,
+  Gzip,
   RemoveHTTPHeader
 }
 import org.apache.commons.httpclient.{Header, HttpParser, StatusLine}
@@ -52,6 +53,9 @@ trait ArchiveRecord extends Serializable {
 
   /** Returns the content of the record as an array of bytes. */
   def getContentBytes: Array[Byte]
+
+  /** Returns the content encoding of the record as a String. */
+  def getContentEncoding: String
 
   /** Returns the content of the record as a String. */
   def getContentString: String
@@ -134,6 +138,15 @@ class ArchiveRecordImpl(r: SerializableWritable[ArchiveRecordWritable])
       ArcRecordUtils.getContent(r.t.getRecord.asInstanceOf[ARCRecord])
     } else {
       WarcRecordUtils.getContent(r.t.getRecord.asInstanceOf[WARCRecord])
+    }
+  }
+
+  val getContentEncoding: String = {
+     if (recordFormat == ArchiveRecordWritable.ArchiveFormat.ARC) {
+      "unknown"
+    } else {
+      Option(WarcRecordUtils.getWarcResponseContentEncoding(getContentBytes))
+        .getOrElse("unknown")
     }
   }
 

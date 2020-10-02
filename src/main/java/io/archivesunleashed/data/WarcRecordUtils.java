@@ -102,6 +102,28 @@ public final class WarcRecordUtils implements WARCConstants {
   }
 
   /**
+   * Extracts the Content Encoding of WARC response records. "WARC-Type" is "response".
+   *
+   * @param contents raw contents of the WARC response record
+   * @return Content Encoding
+   */
+  public static String getWarcResponseContentEncoding(final byte[] contents) {
+    // See note on jankiness above.
+    Pattern pattern = Pattern.compile("Content-Encoding: ([^\\s;]+) *(;.*)?", Pattern.CASE_INSENSITIVE);
+    Matcher matcher = pattern.matcher(new String(contents));
+    if (matcher.find()) {
+      return matcher.group(1).replaceAll(";$", "");
+    }
+
+    return null;
+  }
+
+  /**
+   * Checks if an input stream in GZipped.
+   *
+   * https://notepad2.blogspot.com/2012/07/java-detect-if-file-or-stream-is-gzipped.html
+
+  /**
    * Extracts raw contents from a {@code WARCRecord} (including HTTP headers).
    *
    * @param record the {@code WARCRecord}

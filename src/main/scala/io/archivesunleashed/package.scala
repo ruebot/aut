@@ -169,6 +169,7 @@ package object archivesunleashed {
         Row(
           r.getCrawlDate,
           r.getUrl,
+          r.getContentEncoding,
           r.getMimeType,
           DetectMimeTypeTika(r.getBinaryBytes),
           r.getContentString,
@@ -181,6 +182,7 @@ package object archivesunleashed {
       val schema = new StructType()
         .add(StructField("crawl_date", StringType, true))
         .add(StructField("url", StringType, true))
+        .add(StructField("content_encoding", StringType, true))
         .add(StructField("mime_type_web_server", StringType, true))
         .add(StructField("mime_type_tika", StringType, true))
         .add(StructField("content", StringType, true))
